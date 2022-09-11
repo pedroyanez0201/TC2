@@ -35,216 +35,9 @@ from collections import defaultdict
 from scipy.signal import tf2zpk, TransferFunction, zpk2tf
 from IPython.display import display, Math, Markdown
 import sympy as sp
-from sympy.abc import s
 from schemdraw import Drawing
 from schemdraw.elements import  Resistor, ResistorIEC, Capacitor, Inductor, Line, Dot, Gap, Arrow, CurrentLabelInline
 
-from fractions import Fraction
-
-
-def parametrize_sos(num, den):
-    
-    '''
-    Parameters
-    ----------
-    num : TYPE
-        DESCRIPTION.
-    den : TYPE
-        DESCRIPTION.
-
-    Returns
-    -------
-    None.
-
-    Example
-    -------
-
-    num = sp.Poly((a*s + b),s)
-    den = sp.Poly((c*s + d),s)
-    sos_bili, w_on, Q_n, w_od, Q_d, K = parametrize_sos(num, den)
-
-    num = sp.Poly((a*s),s)
-    sos_bili1, w_on, Q_n, w_od, Q_d, K = parametrize_sos(num, den)
-
-    num = sp.Poly((a),s)
-    sos_bili2, w_on, Q_n, w_od, Q_d, K = parametrize_sos(num, den)
-
-    num = sp.Poly((a*s**2 + b*s + c),s)
-    den = sp.Poly((d*s**2 + e*s + f),s)
-    sos_1, w_on, Q_n, w_od, Q_d, K = parametrize_sos(num, den)
-
-    num = sp.Poly((a*s**2 + c**2),s)
-    sos_2, w_on, Q_n, w_od, Q_d, K = parametrize_sos(num, den)
-
-    num = sp.Poly((a*s**2 + s*b),s)
-    sos_3, w_on, Q_n, w_od, Q_d, K = parametrize_sos(num, den)
-
-    num = sp.Poly(a,s)
-    sos_4, w_on, Q_n, w_od, Q_d, K = parametrize_sos(num, den)
-
-    num = sp.Poly(a*s**2 ,s)
-    sos_5, w_on, Q_n, w_od, Q_d, K = parametrize_sos(num, den)
-
-    num = sp.Poly((b*s),s)
-    sos_6, w_on, Q_n, w_od, Q_d, K = parametrize_sos(num, den)
-
-    '''    
-    
-    w_od = sp.Rational('0')
-    Q_d = sp.Rational('0')
-    w_on = sp.Rational('0')
-    Q_n = sp.Rational('0')
-    K = sp.Rational('0')
-    
-    den_coeffs = den.all_coeffs()
-    num_coeffs = num.all_coeffs()
-
-    if len(den_coeffs) == 3:
-    # only 2nd order denominators allowed
-        
-        w_od = sp.sqrt(den_coeffs[2]/den_coeffs[0])
-        
-        omega_Q = den_coeffs[1]/den_coeffs[0]
-        
-        Q_d = sp.simplify(sp.expand(w_od / omega_Q))
-        
-        k_d = den_coeffs[0]
-        
-        # wo-Q parametrization
-        den  = sp.poly( s**2 + s * sp.Mul(w_od, 1/Q_d, evaluate=False) + w_od**2, s)
-
-
-        if num.is_monomial:
-            
-            if num.degree() == 2:
-                #pasaaltos
-                
-                k_n = num_coeffs[0]
-                
-                num  = sp.poly( s**2, s)
-
-            elif num.degree() == 1:
-                #pasabanda
-                
-                k_n = num_coeffs[0] * Q_d / w_od
-                
-                # wo-Q parametrization
-                num  = sp.poly( s * w_od / Q_d , s)
-
-            else:
-                #pasabajos
-                
-                k_n = num_coeffs[0] / w_od**2
-                
-                num  = sp.poly( w_od**2, s)
-
-                
-        else:
-        # no monomial
-        
-            if num.degree() == 2:
-
-                if num_coeffs[1].is_zero:
-                    
-                    # zero at w_on
-                    w_on = sp.sqrt(num_coeffs[2]/num_coeffs[0])
-
-                    k_n = num_coeffs[0]
-                
-                    num  = sp.poly( s**2 + w_on**2, s)
-
-                if num_coeffs[2].is_zero:
-                
-                    # zero at w=0 and at w_on
-                    w_on = num_coeffs[1]/num_coeffs[0]
-
-                    k_n = num_coeffs[0]
-
-                    num = sp.poly( s*( s + w_on), s)
-                
-                else: 
-                    # complete poly -> full bicuad
-                
-                    w_on = sp.sqrt(num_coeffs[2]/num_coeffs[0])
-                
-                    omega_Q = num_coeffs[1]/num_coeffs[0]
-                    
-                    Q_n = sp.simplify(sp.expand(w_on / omega_Q))
-                    
-                    k_n = num_coeffs[0]
-                    
-                    # wo-Q parametrization
-                    num  = sp.poly( s**2 + s * sp.Mul(w_on, 1/Q_n, evaluate=False) + w_on**2, s)
-
-            
-            else:
-                # only first order
-                
-                w_on = num_coeffs[1] / num_coeffs[0]
-                
-                k_n = num_coeffs[0]
-                
-                num  = sp.poly( s * w_on, s)
-
-        
-        K = sp.simplify(sp.expand(k_n / k_d))
-
-    elif len(den_coeffs) == 2:
-        # bilineal
-        w_od = den_coeffs[1]/den_coeffs[0]
-        
-        k_d = den_coeffs[0]
-        
-        # wo-Q parametrization
-        den  = sp.poly( s + w_od, s)        
-    
-        if num.is_monomial:
-            
-            if num.degree() == 1:
-                
-                k_n = num_coeffs[0]
-                
-                # wo-Q parametrization
-                num = sp.poly( s, s)        
-
-            else:
-                                
-                k_n = num_coeffs[0] / w_od
-                
-                num  = sp.poly( w_od, s)
-
-                
-        else:
-        # no monomial
-        
-            w_on = num_coeffs[1]/num_coeffs[0]
-            
-            k_n = num_coeffs[0]
-            
-            # wo-Q parametrization
-            num = sp.poly( s + w_on, s)        
-    
-        K = sp.simplify(sp.expand(k_n / k_d))
-
-    return( num, den, w_on, Q_n, w_od, Q_d, K )
-
-
-def simplify_n_monic(tt):
-    
-    num, den = sp.fraction(tt)
-    
-    num = sp.poly(num,s)
-    den = sp.poly(den,s)
-    
-    lcnum = sp.LC(num)
-    lcden = sp.LC(den)
-    
-    k = num.LC() / den.LC()
-    
-    num = num.monic()
-    den = den.monic()
-
-    return( sp.Mul(k,num/den, evaluate=False) )
 
 def pp(z1, z2):
     '''
@@ -1444,12 +1237,7 @@ def print_latex(strAux):
     display(Math(strAux))
 
 
-def pretty_print_lti(num, den = None, displaystr = True):
-    
-    if den is None:
-        this_lti = num
-    else:
-        this_lti = TransferFunction(num, den)
+def pretty_print_lti(this_lti, displaystr = True):
     
     num_str_aux = build_poly_str(this_lti.num)
     den_str_aux = build_poly_str(this_lti.den)
@@ -1576,7 +1364,9 @@ def pretty_print_SOS(mySOS, mode = 'default', displaystr = True):
 
 
 
-def analyze_sys( all_sys, sys_name = None, img_ext = 'none', same_figs=True, annotations = True, digital = False, fs = 2*np.pi):
+def analyze_sys( all_sys, sys_name = None, img_ext = 'none', same_figs=True ):
+    
+    
     
     valid_ext = ['none', 'png', 'svg']
     if img_ext not in valid_ext:
@@ -1604,7 +1394,7 @@ def analyze_sys( all_sys, sys_name = None, img_ext = 'none', same_figs=True, ann
     axes_hdl = ()
 
     for ii in range(cant_sys):
-        fig_id, axes_hdl = bodePlot(all_sys[ii], fig_id, axes_hdl, filter_description = sys_name[ii], digital = digital, fs = fs)
+        fig_id, axes_hdl = bodePlot(all_sys[ii], fig_id, axes_hdl, label = sys_name[ii])
 
     if img_ext != 'none':
         plt.savefig('_'.join(sys_name) + '_Bode.' + img_ext, format=img_ext)
@@ -1613,7 +1403,7 @@ def analyze_sys( all_sys, sys_name = None, img_ext = 'none', same_figs=True, ann
     # axes_hdl = ()
 
     # for ii in range(cant_sys):
-    #     fig_id, axes_hdl = bodePlot(all_sys[ii], fig_id, axes_hdl, filter_description = sys_name[ii])
+    #     fig_id, axes_hdl = bodePlot(all_sys[ii], fig_id, axes_hdl, label = sys_name[ii])
 
     # axes_hdl[0].set_ylim(bottom=-3)
 
@@ -1638,14 +1428,14 @@ def analyze_sys( all_sys, sys_name = None, img_ext = 'none', same_figs=True, ann
             
             thisFilter = sos2tf_analog(all_sys[ii])
 
-            analog_fig_id, analog_axes_hdl = pzmap(thisFilter, filter_description=sys_name[ii], fig_id = analog_fig_id, axes_hdl=analog_axes_hdl, annotations = annotations, digital = digital, fs = fs)
+            analog_fig_id, analog_axes_hdl = pzmap(thisFilter, filter_description=sys_name[ii], fig_id = analog_fig_id, axes_hdl=analog_axes_hdl, annotations = True)
             
         else:
                 
             if all_sys[ii].dt is None:
-                analog_fig_id, analog_axes_hdl = pzmap(all_sys[ii], filter_description=sys_name[ii], fig_id = analog_fig_id, axes_hdl=analog_axes_hdl, annotations = annotations)
+                analog_fig_id, analog_axes_hdl = pzmap(all_sys[ii], filter_description=sys_name[ii], fig_id = analog_fig_id, axes_hdl=analog_axes_hdl)
             else:
-                digital_fig_id, digital_axes_hdl = pzmap(all_sys[ii], filter_description=sys_name[ii], fig_id = digital_fig_id, axes_hdl=digital_axes_hdl, annotations = annotations)
+                digital_fig_id, digital_axes_hdl = pzmap(all_sys[ii], filter_description=sys_name[ii], fig_id = digital_fig_id, axes_hdl=digital_axes_hdl)
             
 
     if isinstance(all_sys[ii], np.ndarray) or ( isinstance(all_sys[ii], TransferFunction) and all_sys[ii].dt is None) :
@@ -1668,7 +1458,7 @@ def analyze_sys( all_sys, sys_name = None, img_ext = 'none', same_figs=True, ann
         fig_id = 'none'
     
     for ii in range(cant_sys):
-        fig_id, axes_hdl = GroupDelay(all_sys[ii], fig_id, filter_description = sys_name[ii], digital = digital, fs = fs)
+        fig_id, axes_hdl = GroupDelay(all_sys[ii], fig_id, label = sys_name[ii])
     
     # axes_hdl.legend(sys_name)
 
@@ -1679,7 +1469,7 @@ def analyze_sys( all_sys, sys_name = None, img_ext = 'none', same_figs=True, ann
 
 
 
-def pzmap(myFilter, annotations = False, filter_description = None, fig_id='none', axes_hdl='none'):
+def pzmap(myFilter, annotations = False, filter_description='none', fig_id='none', axes_hdl='none'):
     """Plot the complex s-plane given zeros and poles.
     Pamams:
      - b: array_like. Numerator polynomial coefficients.
@@ -1717,12 +1507,11 @@ def pzmap(myFilter, annotations = False, filter_description = None, fig_id='none
     
 #        maxRadius = np.abs(10*np.sqrt(p[0]))
     
-    
     # Plot the poles and set marker properties
-    if filter_description is None:
-        poles = plt.plot(p.real, p.imag, 'x', markersize=9)
-    else:
-        poles = plt.plot(p.real, p.imag, 'x', markersize=9, label=filter_description)
+    poles = plt.plot(p.real, p.imag, 'x', markersize=9, label=filter_description)
+    
+#    if filter_description != 'none':
+#        poles[0].label = filter_description
     
     # Plot the zeros and set marker properties
     zeros = plt.plot(z.real, z.imag,  'o', markersize=9, 
@@ -1862,15 +1651,13 @@ def pzmap(myFilter, annotations = False, filter_description = None, fig_id='none
 
     fig_hdl.suptitle('Poles and Zeros map')
 
-    if not(filter_description is None):
-       axes_hdl.legend()
+    axes_hdl.legend()
 
     return fig_id, axes_hdl
     
 
-def GroupDelay(myFilter, fig_id='none', filter_description=None, npoints = 1000, digital = False, fs = 2*np.pi):
+def GroupDelay(myFilter, fig_id='none', label = '', npoints = 1000):
 
-    w_nyq = 2*np.pi*fs/2
     
     if isinstance(myFilter, np.ndarray):
         # SOS section
@@ -1882,37 +1669,23 @@ def GroupDelay(myFilter, fig_id='none', filter_description=None, npoints = 1000,
             
             num, den = one_sos2tf(myFilter[ii,:])
             thisFilter = TransferFunction(num, den)
-            
-            if digital:
-                w, _, phase[:,ii] = thisFilter.bode(np.linspace(10**-2, w_nyq, npoints))
-            else:
-                w, _, phase[:,ii] = thisFilter.bode(np.logspace(-2,2,npoints))
-            
-            sos_label += [filter_description + ' - SOS {:d}'.format(ii)]
+            w, _, phase[:,ii] = thisFilter.bode(np.logspace(-2,2,npoints))
+            sos_label += [label + ' - SOS {:d}'.format(ii)]
         
         # whole filter
         thisFilter = sos2tf_analog(myFilter)
+        w, _, phase[:,cant_sos] = thisFilter.bode(np.logspace(-2,2,npoints))
+        sos_label += [label]
         
-        if digital:
-            w, _, phase[:,cant_sos] = thisFilter.bode(np.linspace(10**-2, w_nyq, npoints))
-        else:
-            w, _, phase[:,cant_sos] = thisFilter.bode(np.logspace(-2,2,npoints))
-        
-        sos_label += [filter_description]
-        
-        filter_description = sos_label
+        label = sos_label
         
     else:
         # LTI object
         cant_sos = 0
+        w,_,phase = myFilter.bode( np.logspace(-2,2,npoints) )
         
-        if myFilter.dt is None:
-            w, _, phase = myFilter.bode(np.logspace(-2,2,npoints))
-        else:
-            w, _, phase = myFilter.bode(np.linspace(10**-2, w_nyq, npoints))
-        
-        if isinstance(filter_description, str):
-            filter_description = [filter_description]
+        if isinstance(label, str):
+            label = [label]
 
 
     phaseRad = phase * np.pi / 180.0
@@ -1928,10 +1701,7 @@ def GroupDelay(myFilter, fig_id='none', filter_description=None, npoints = 1000,
             fig_hdl = plt.figure(fig_id)
             fig_id = fig_hdl.number
 
-    if digital:
-        aux_hdl = plt.plot(w[1:] / w_nyq , groupDelay, label=filter_description)    # Bode phase plot
-    else:
-        aux_hdl = plt.semilogx(w[1:], groupDelay, label=filter_description)    # Bode phase plot
+    aux_hdl = plt.semilogx(w[1:], groupDelay, label=label)    # Bode phase plot
 
     if cant_sos > 0:
         # distinguish SOS from total response
@@ -1939,30 +1709,19 @@ def GroupDelay(myFilter, fig_id='none', filter_description=None, npoints = 1000,
         aux_hdl[-1].set_linewidth(2)
     
     plt.grid(True)
-    
-    
-    if digital:
-
-        plt.gca().set_xlim([0, 1])
-        
-        plt.xlabel('Frecuencia normalizada a Nyq [#]')
-    else:
-        plt.xlabel('Angular frequency [rad/sec]')
-    
+    plt.xlabel('Angular frequency [rad/sec]')
     plt.ylabel('Group Delay [sec]')
     plt.title('Group delay')
 
     axes_hdl = plt.gca()
     
-    if not(filter_description is None):
-        # axes_hdl.legend( filter_description )
+    if label != '' :
+        # axes_hdl.legend( label )
         axes_hdl.legend()
 
     return fig_id, axes_hdl
 
-def bodePlot(myFilter, fig_id='none', axes_hdl='none', filter_description=None, npoints = 1000, digital = False, fs = 2*np.pi ):
-
-    w_nyq = 2*np.pi*fs/2
+def bodePlot(myFilter, fig_id='none', axes_hdl='none', label = '', npoints = 1000 ):
     
     if isinstance(myFilter, np.ndarray):
         # SOS section
@@ -1975,37 +1734,23 @@ def bodePlot(myFilter, fig_id='none', axes_hdl='none', filter_description=None, 
             
             num, den = one_sos2tf(myFilter[ii,:])
             thisFilter = TransferFunction(num, den)
-            if digital:
-                w, mag[:, ii], phase[:,ii] = thisFilter.bode(np.linspace(10**-2, w_nyq,npoints))
-            else:
-                w, mag[:, ii], phase[:,ii] = thisFilter.bode(np.logspace(-2,2,npoints))
-                
-            sos_label += [filter_description + ' - SOS {:d}'.format(ii)]
+            w, mag[:, ii], phase[:,ii] = thisFilter.bode(np.logspace(-2,2,npoints))
+            sos_label += [label + ' - SOS {:d}'.format(ii)]
         
         # whole filter
         thisFilter = sos2tf_analog(myFilter)
-
-        if digital:
-            w, mag[:, cant_sos], phase[:,cant_sos] = thisFilter.bode(np.linspace(10**-2, w_nyq, npoints))
-        else:
-            w, mag[:, cant_sos], phase[:,cant_sos] = thisFilter.bode(np.logspace(-2,2,npoints))
-            
-        sos_label += [filter_description]
+        w, mag[:, cant_sos], phase[:,cant_sos] = thisFilter.bode(np.logspace(-2,2,npoints))
+        sos_label += [label]
         
-        filter_description = sos_label
+        label = sos_label
         
     else:
         # LTI object
         cant_sos = 0
+        w, mag, phase = myFilter.bode(np.logspace(-2,2,npoints))
         
-        if myFilter.dt is None:
-            # filtro analógico normalizado
-            w, mag, phase = myFilter.bode(np.logspace(-2,2,npoints))
-        else:
-            w, mag, phase = myFilter.bode(np.linspace(10**-2, w_nyq, npoints))
-        
-        if isinstance(filter_description, str):
-            filter_description = [filter_description]
+        if isinstance(label, str):
+            label = [label]
         
 
     if fig_id == 'none':
@@ -2023,17 +1768,7 @@ def bodePlot(myFilter, fig_id='none', axes_hdl='none', filter_description=None, 
     (mag_ax_hdl, phase_ax_hdl) = axes_hdl
     
     plt.sca(mag_ax_hdl)
-
-    if digital:
-        if filter_description is None:
-            aux_hdl = plt.plot(w / w_nyq, mag)    # Bode magnitude plot
-        else:
-            aux_hdl = plt.plot(w / w_nyq, mag, label=filter_description)    # Bode magnitude plot
-    else:
-        if filter_description is None:
-            aux_hdl = plt.semilogx(w, mag)    # Bode magnitude plot
-        else:
-            aux_hdl = plt.semilogx(w, mag, label=filter_description)    # Bode magnitude plot
+    aux_hdl = plt.semilogx(w, mag, label=label)    # Bode magnitude plot
     
     if cant_sos > 0:
         # distinguish SOS from total response
@@ -2045,60 +1780,13 @@ def bodePlot(myFilter, fig_id='none', axes_hdl='none', filter_description=None, 
     plt.ylabel('Magnitude [dB]')
     plt.title('Magnitude response')
     
-    if not(filter_description is None):
-        # mag_ax_hdl.legend( filter_description )
+    if label != '' :
+        # mag_ax_hdl.legend( label )
         mag_ax_hdl.legend()
 
         
     plt.sca(phase_ax_hdl)
-    
-    if digital:
-        if filter_description is None:
-            aux_hdl = plt.plot(w / w_nyq, np.pi/180*phase)    # Bode phase plot
-        else:
-            aux_hdl = plt.plot(w / w_nyq, np.pi/180*phase, label=filter_description)    # Bode phase plot
-            
-    else:
-        if filter_description is None:
-            aux_hdl = plt.semilogx(w, np.pi/180*phase)    # Bode phase plot
-        else:
-            aux_hdl = plt.semilogx(w, np.pi/180*phase, label=filter_description)    # Bode phase plot
-    
-    
-    # Scale axes to fit
-    ylim = plt.gca().get_ylim()
-
-    # presentar la fase como fracciones de \pi
-    ticks = np.linspace(start=np.round(ylim[0]/np.pi)*np.pi, stop=np.round(ylim[1]/np.pi)*np.pi, num = 5, endpoint=True)
-
-    ylabs = []
-    for aa in ticks:
-        
-        if aa == 0:
-            ylabs += ['0'] 
-        else:
-            bb = Fraction(aa/np.pi).limit_denominator(1000000)
-            if np.abs(bb.numerator) != 1:
-                if np.abs(bb.denominator) != 1:
-                    str_aux = r'$\frac{{{:d}}}{{{:d}}} \pi$'.format(bb.numerator, bb.denominator)
-                else:
-                    str_aux = r'${:d}\pi$'.format(bb.numerator)
-                    
-            else:
-                if np.abs(bb.denominator) == 1:
-                    if np.sign(bb.numerator) == -1:
-                        str_aux = r'$-\pi$'
-                    else:
-                        str_aux = r'$\pi$'
-                else:
-                    if np.sign(bb.numerator) == -1:
-                        str_aux = r'$-\frac{{\pi}}{{{:d}}}$'.format(bb.denominator)
-                    else:
-                        str_aux = r'$\frac{{\pi}}{{{:d}}}$'.format(bb.denominator)
-                    
-            ylabs += [ str_aux ]
-            
-    plt.yticks(ticks, labels = ylabs )
+    aux_hdl = plt.semilogx(w, phase, label=label)    # Bode phase plot
     
     if cant_sos > 0:
         # distinguish SOS from total response
@@ -2106,97 +1794,16 @@ def bodePlot(myFilter, fig_id='none', axes_hdl='none', filter_description=None, 
         aux_hdl[-1].set_linewidth(2)
     
     plt.grid(True)
-
-    if digital:
-
-        plt.gca().set_xlim([0, 1])
-        
-        plt.xlabel('Frecuencia normalizada a Nyq [#]')
-    else:
-        plt.xlabel('Angular frequency [rad/sec]')
-    plt.ylabel('Phase [rad]')
+    plt.xlabel('Angular frequency [rad/sec]')
+    plt.ylabel('Phase [deg]')
     plt.title('Phase response')
     
-    if not(filter_description is None):
-        # phase_ax_hdl.legend( filter_description )
+    if label != '' :
+        # phase_ax_hdl.legend( label )
         phase_ax_hdl.legend()
     
     return fig_id, axes_hdl
     
-
-def plot_plantilla(filter_type = 'lowpass', fpass = 0.25, ripple = 0.5, fstop = 0.6, attenuation = 40, fs = 2 ):
-    
-    # para sobreimprimir la plantilla de diseño de un filtro
-    
-    xmin, xmax, ymin, ymax = plt.axis()
-    
-    # banda de paso digital
-    plt.fill([xmin, xmin, fs/2, fs/2],   [ymin, ymax, ymax, ymin], 'g', alpha= 0.2, lw=1, label = 'bw digital') # pass
-    
-    if filter_type == 'lowpass':
-    
-        fstop_start = fstop
-        fstop_end = xmax
-        
-        fpass_start = xmin
-        fpass_end   = fpass
-    
-        plt.fill( [fstop_start, fstop_end,   fstop_end, fstop_start], [-attenuation, -attenuation, ymax, ymax], '0.9', lw=1, ls = '--', ec = 'k', label = 'plantilla') # stop
-        plt.fill( [fpass_start, fpass_start, fpass_end, fpass_end],   [ymin, -ripple, -ripple, ymin], '0.9', lw=1, ls = '--', ec = 'k') # pass
-    
-    elif filter_type == 'highpass':
-    
-        fstop_start = xmin
-        fstop_end = fstop 
-        
-        fpass_start = fpass
-        fpass_end   = xmax
-    
-        plt.fill( [fstop_start, fstop_end,   fstop_end, fstop_start], [-attenuation, -attenuation, ymax, ymax], '0.9', lw=1, ls = '--', ec = 'k', label = 'plantilla') # stop
-        plt.fill( [fpass_start, fpass_start, fpass_end, fpass_end],   [ymin, -ripple, -ripple, ymin], '0.9', lw=1, ls = '--', ec = 'k') # pass
-    
-    
-    elif filter_type == 'bandpass':
-    
-        fstop_start = xmin
-        fstop_end = fstop[0]
-        
-        fpass_start = fpass[0]
-        fpass_end   = fpass[1]
-        
-        fstop2_start = fstop[1]
-        fstop2_end =  xmax
-        
-        plt.fill( [fstop_start, fstop_end,   fstop_end, fstop_start], [-attenuation, -attenuation, ymax, ymax], '0.9', lw=1, ls = '--', ec = 'k', label = 'plantilla') # stop
-        plt.fill( [fpass_start, fpass_start, fpass_end, fpass_end],   [ymin, -ripple, -ripple, ymin], '0.9', lw=1, ls = '--', ec = 'k') # pass
-        plt.fill( [fstop2_start, fstop2_end,   fstop2_end, fstop2_start], [-attenuation, -attenuation, ymax, ymax], '0.9', lw=1, ls = '--', ec = 'k') # stop
-        
-    elif filter_type == 'bandstop':
-    
-        fpass_start = xmin
-        fpass_end   = fpass[0]
-    
-        fstop_start = fstop[0]
-        fstop_end = fstop[1]
-        
-        fpass2_start = fpass[1]
-        fpass2_end   = xmax
-            
-        plt.fill([fpass_start, fpass_start, fpass_end, fpass_end],   [ymin, -ripple, -ripple, ymin], '0.9', lw=1, ls = '--', ec = 'k', label = 'plantilla') # pass
-        plt.fill([fstop_start, fstop_end,   fstop_end, fstop_start], [-attenuation, -attenuation, ymax, ymax], '0.9', lw=1, ls = '--', ec = 'k') # stop
-        plt.fill([fpass2_start, fpass2_start, fpass2_end, fpass2_end],   [ymin, -ripple, -ripple, ymin], '0.9', lw=1, ls = '--', ec = 'k') # pass
-    
-    
-    plt.axis([xmin, xmax, np.max([ymin, -100]), np.max([ymax, 5])])
-    
-    axes_hdl = plt.gca()
-    axes_hdl.legend()
-    
-    plt.show()
-    
-    
-
-
 def sos2tf_analog(mySOS):
     
     SOSnumber, _ = mySOS.shape
@@ -2411,8 +2018,7 @@ def zpk2sos_analog(z, p, k, pairing='nearest'):
         
         _, mag, _ = thisFilter.bode(np.logspace(-2,2,100))
         
-        # bode in dB
-        maxima_tf[si] = 10**(np.max(mag)/20)
+        maxima_tf[si] = np.max(mag)
     
     mmi = np.cumprod(maxima_tf) # M_i according to Schaumann eq 5.76
 
@@ -2558,4 +2164,3 @@ def _cplxreal(z, tol=None):
     zc = (zp + zn.conj()) / 2
 
     return zc, zr
-
